@@ -39,7 +39,7 @@ usage () {
 }
 
 abort () {
-	usage
+	echo $1
 	exit 1
 }
 
@@ -47,9 +47,59 @@ trap_signals () {
 	echo "I'll be back ;)"
 }
 
-check_args_num () {
-	if [ $1 -eq 0 ]; then
-		abort
+get_task_args_num () {
+	local args_num=0
+	local regex='^-.$'
+
+	for arg in "$@"; do
+		if [[ $arg =~ $regex ]] || [ $arg = $1 ]; then
+			continue
+		fi
+		
+		args_num=`expr $args_num + 1`
+	done	
+
+	echo $args_num
+}
+
+check_task_args_num () {
+	if [ $1 -ne $2 ]; then
+		usage
+		exit 1
+	fi
+}
+
+set_source_dir_var () {
+	if [ ! -d $1 ]; then
+		abort "source_dir must be a valid path and a directory"
+	else
+		source_dir=$1
+	fi
+}
+
+set_config_file_var () {
+	if [ ! -f $1 ]; then
+		abort "config_file must be a valid path and a file"
+	else
+		config_file=$1
+	fi
+}
+
+set_days_var () {
+	local regex='^[0-9]+$'
+
+	if ! [[ $1 =~ $regex ]]; then
+		abort "days must be a number"
+	else
+		days=$1
+	fi
+}
+
+set_destination_dir_var () {
+	if [ ! -d $1 ]; then
+		abort "destination_dir must be a valid path and a directory"
+	else
+		destination_dir=$1
 	fi
 }
 
@@ -58,10 +108,11 @@ du_dirs_flags () {
 	while getopts "s:" opt; do
 		case $opt in
 			s)
-				source_dir=$OPTARG
+				set_source_dir_var $OPTARG
 				;;
 			*)
-				abort
+				usage
+				exit 1
 				;;
 		esac
 	done
@@ -74,13 +125,14 @@ find_shell_scripts_flags () {
 	while getopts "s:x" opt; do
 		case $opt in
 			s)
-				source_dir=$OPTARG
+				set_source_dir_var $OPTARG
 				;;
 			x)
 				execution_user_permmision=1
 				;;
 			*)
-				abort
+				usage
+				exit 1
 				;;
 		esac
 	done
@@ -92,10 +144,11 @@ send_signals_flags () {
 	while getopts "p:" opt; do
 		case $opt in
 			p)
-				config_file=$OPTARG
+				set_config_file_var $OPTARG
 				;;
 			*)
-				abort
+				usage
+				exit 1
 				;;
 		esac
 	done
@@ -107,13 +160,14 @@ delete_old_files_flags () {
 	while getopts "s:m:" opt; do
 		case $opt in
 			s)
-				source_dir=$OPTARG
+				set_source_dir_var $OPTARG
 				;;
 			m)
-				days=$OPTARG
+				set_days_var $OPTARG
 				;;
 			*)
-				abort
+				usage
+				exit 1
 				;;
 		esac
 	done
@@ -125,13 +179,27 @@ sync_dir_flags () {
 	while getopts "s:d:" opt; do
 		case $opt in
 			s)
-				source_dir=$OPTARG
+				set_source_dir_var $OPTARG
 				;;
 			d)
-				destination_dir=$OPTARG
+				set_destination_dir_var $OPTARG
 				;;
 			*)
-				abort
+				usage
+				exit 1
+				;;
+		esac
+	done
+	shift $((OPTIND-1))
+}
+
+no_flags () {
+	OPTIND=2
+	while getopts ":*:" opt; do
+		case $opt in
+			*)
+				usage
+				exit 1
 				;;
 		esac
 	done
@@ -143,7 +211,7 @@ execute_du_dirs () {
 }
 
 execute_find_shell_scripts () {
-	if [ "$2" = "1" ]; then
+	if [ $2 -eq 1 ]; then
 		find $1 -type f -name "*.sh" -print -exec chmod u+x 2>/dev/null {} \;
 	else
 		find $1 -type f -name "*.sh" -print
@@ -154,7 +222,7 @@ execute_send_signals () {
 	while read line; do
 		is_line_comment_or_empty "$line"
 		
-		if [ "$?" -ne "1" ]; then
+		if [ $? -ne 1 ]; then
 			continue
 		fi
 		
@@ -163,7 +231,7 @@ execute_send_signals () {
 
 		is_process_running $process_name
 		
-		if [ "$?" -eq "0" ]; then
+		if [ $? -eq 0 ]; then
 			local pid=`get_pid $process_name`
 			kill -$signal_name $pid
 		fi
@@ -173,12 +241,12 @@ execute_send_signals () {
 is_line_comment_or_empty () {
 	echo "$1" | egrep -q '^\s*#'
 	
-	if [ "$?" -eq "0" ]; then
+	if [ $? -eq 0 ]; then
 		return 0
 	else
 		echo "$1" | egrep -q '^\s*$'
 
-		if [ "$?" -eq "0" ]; then
+		if [ $? -eq 0 ]; then
 			return 0
 		fi
 	fi
@@ -189,7 +257,7 @@ is_line_comment_or_empty () {
 is_process_running () {
 	ps -ef | awk '{ printf " %s\n", $8 }' | grep " $1" | grep -v grep > /dev/null 2>&1
 
-	if [ "$?" -eq "0" ]; then
+	if [ $? -eq 0 ]; then
 		return 0
 	fi
 
@@ -205,7 +273,7 @@ get_pid () {
 		local curr_ppid=`ps -ef | awk -v var=$pid '{if($2 == var) print $3}'`
 		
 		ps -ef | awk -v var=$curr_ppid '{if($2 == var) print}' | awk '{ printf " %s\n", $8 }' | grep " $1"
-		if [ "$?" -eq "1" ]; then
+		if [ $? -eq 1 ]; then
 			break
 		fi
 	done
@@ -220,7 +288,7 @@ execute_delete_old_files () {
 execute_sync_dir () {
 	find $1 -type f | while read file_path; do 
 		find $2 -type f -name file_path | grep -q "." > /dev/null 2>&1
-		if [ "$?" -ne "0" ]; then
+		if [ $? -ne 0 ]; then
 			local file_name=${file_path##*/}
 			cp $file_path $2/$file_name
 		fi
@@ -230,16 +298,14 @@ execute_sync_dir () {
 execute_list_net_cards () {
 	ifconfig -a | sed 's/[: \t].*//;/^$/d' | while read network_name; do
 		local ip=`ifconfig $network_name | grep inet | egrep -o 'inet ([0-9]{1,3}[\.]){3}[0-9]{1,3}' | cut -d' ' -f2`
-		if [ "$?" -eq "0" ]; then
+		if [ $? -eq 0 ]; then
 			echo $network_name $ip
 		fi
 	done
 }
 
 execute_list_rpms () {
-	rpm -qa | while read pkg_name; do
-		rpm -qi $pkg_name | egrep 'Name|Version|Vendor|Install Date' | awk -F'\n' '{print $1, $2, $4, $3}' OFS='\n' RS= ORS='\n\n'
-	done
+	rpm -qai | egrep '^Name  |^Version|^Vendor|^Install Date'| awk -F': ' '{ print $2 }' | awk '{line=line " " $0} NR%4==0{print substr(line,2); line=""}'
 }
 
 execute_ps_threads () {
@@ -251,49 +317,62 @@ execute_ps_threads () {
 }
 
 execute_shellshock () {
-	env x='() { :;}; echo shellshock' bash -c 'echo '
+	env x='() { :;}; echo shellshock' bash -c 'echo -n'
 }
 
 ###################### Main of the script ######################
 
 trap trap_signals SIGINT SIGTERM
-check_args_num $#
 
 case $1 in 
 	du_dirs)
+		check_task_args_num `get_task_args_num "$@"` 1
 		du_dirs_flags "$@"
 		execute_du_dirs	$source_dir
 		;;
 	find_shell_scripts)
+		check_task_args_num `get_task_args_num "$@"` 1
 		find_shell_scripts_flags "$@"
 		execute_find_shell_scripts $source_dir $execution_user_permmision 
 		;;
 	send_signals)
+		check_task_args_num `get_task_args_num "$@"` 1
 		send_signals_flags "$@"
 		execute_send_signals $config_file
 		;;
 	delete_old_files)
+		check_task_args_num `get_task_args_num "$@"` 2
 		delete_old_files_flags "$@"
 		execute_delete_old_files $source_dir $days
 		;;
 	sync_dir)
+		check_task_args_num `get_task_args_num "$@"` 2
 		sync_dir_flags "$@"
 		execute_sync_dir $source_dir $destination_dir
 		;;
 	list_net_cards)
+		check_task_args_num `get_task_args_num "$@"` 0
+		no_flags "$@"
 		execute_list_net_cards
 		;;
 	list_rpms)
+		check_task_args_num `get_task_args_num "$@"` 0
+		no_flags "$@"
 		execute_list_rpms
 		;;
 	ps_threads)
+		check_task_args_num `get_task_args_num "$@"` 0
+		no_flags "$@"
 		execute_ps_threads
 		;;
 	shellshock)
+		check_task_args_num `get_task_args_num "$@"` 0
+		no_flags "$@"
 		execute_shellshock
 		;;
 	*)
-		abort
+		usage
+		exit 1
 		;;
 esac
 
