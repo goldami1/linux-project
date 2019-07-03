@@ -18,15 +18,6 @@ abort () {
 	exit 1
 }
 
-dump_vars () {
-	echo	"url_to_registry is $url_to_registry
-		user is $user
-		password is $password
-		tag is $tag
-		status is $status
-		command_name is $command_name"
-}
-
 get_command_args_num () {
 	local args_num=0
 	local regex='^-.$'
@@ -74,7 +65,7 @@ command_flag () {
 
 set_status_var () {
 	if [ $1 = "running" ] || [ $1 = "exited" ]; then
-		status_var=$1
+		status=$1
 	else
 		abort "status must be running or exited"
 	fi
@@ -122,6 +113,14 @@ execute_clean_ps () {
 	docker rm --force $(docker ps -a --filter status=$1 | awk 'NR>1 { print $1 }') > /dev/null
 }
 
+execute_build_push () {
+	local dockerId=`docker build -t "$1:$4" . | grep "Successfully built" | cut -d" " -f3`
+	if [ $? -ne 0 ]; then
+		abort "Failed building docker container"
+	fi
+	docker login --username=$2 --password=$3 2>/dev/null && docker push $1 && docker rmi --force $dockerId  || abort "Wrong Credentials"
+}
+
 ###################### Main of the script ######################
 
 is_command_arg_exist $2
@@ -135,6 +134,7 @@ case $command_name in
 	build_push)
 		compare_args_num `get_command_args_num "$@"` 5
 		build_push_flags "$@"
+		execute_build_push $url_to_registry $user $password $tag
 		;;
 esac
 
