@@ -1,7 +1,7 @@
 #!/bin/bash
 
 usage () {
-	echo "Usage: docker_tool.sh	[-c clean ps -s <status> |"
+	echo "Usage: docker_tool.sh	[-c clean_ps -s <status> |"
 	echo "			-c build_push -r <url_to_registry> -u <user>"
 	echo "			-p <password> -v <tag>] [-t]"
 	echo
@@ -13,11 +13,55 @@ usage () {
 	echo "    After successful push the local image will be removed."
 }
 
+abort () {
+	echo $1
+	exit 1
+}
+
+dump_vars () {
+	echo	"url_to_registry is $url_to_registry
+		user is $user
+		password is $password
+		tag is $tag
+		status is $status
+		command_name is $command_name"
+}
+
+get_command_args_num () {
+	local args_num=0
+	local regex='^-.$'
+
+	for arg in "$@"; do
+		if [[ $arg =~ $regex ]]; then
+			continue
+		fi
+		
+		args_num=`expr $args_num + 1`
+	done		
+
+	echo $args_num
+}
+
+is_command_arg_exist () {
+	if [ -z $1 ]; then
+		usage
+		exit 1
+	fi
+}
+
+compare_args_num () {
+	if [ $1 -ne $2 ]; then
+		usage
+		exit 1
+	fi
+}
+
 command_flag () {
 	while getopts "c:" opt; do
 		case $opt in
 			c)
 				command_name=$OPTARG
+				break
 				;;
 			*)
 				usage
@@ -25,14 +69,23 @@ command_flag () {
 				;;
 		esac
 	done
-#	shift $((OPTIND-1))
+	shift $((OPTIND-1))
+}
+
+set_status_var () {
+	if [ $1 = "running" ] || [ $1 = "exited" ]; then
+		status_var=$1
+	else
+		abort "status must be running or exited"
+	fi
 }
 
 clean_ps_flags () {
+	OPTIND=3
 	while getopts "s:" opt; do
 		case $opt in
 			s)
-				status=$OPTARG
+				set_status_var $OPTARG
 				;;
 			*)
 				usage
@@ -65,21 +118,24 @@ build_push_flags () {
 	done
 }
 
+execute_clean_ps () {
+	docker rm --force $(docker ps -a --filter status=$1 | awk 'NR>1 { print $1 }') > /dev/null
+}
+
 ###################### Main of the script ######################
 
+is_command_arg_exist $2
 command_flag "$@"
 case $command_name in
 	clean_ps)
+		compare_args_num `get_command_args_num "$@"` 2
 		clean_ps_flags "$@"
+		execute_clean_ps $status
 		;;
 	build_push)
+		compare_args_num `get_command_args_num "$@"` 5
 		build_push_flags "$@"
 		;;
 esac
 
-echo "url_to_registry is $url_to_registry"
-echo "user is $user"
-echo "password is $password"
-echo "tag is $tag"
-echo "status is $status"
-echo "command_name is $command_name"
+
