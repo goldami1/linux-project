@@ -136,6 +136,9 @@ case $command_name in
 		build_push_flags "$@"
 		execute_build_push $url_to_registry $user $password $tag
 		;;
+	*)
+		abort "Command does not exist"
+		;;
 esac
 
 
