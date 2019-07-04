@@ -88,6 +88,7 @@ clean_ps_flags () {
 }
 
 build_push_flags () {
+	OPTIND=3	
 	while getopts "r:u:p:v:" opt; do
 		case $opt in
 			r)
@@ -108,6 +109,7 @@ build_push_flags () {
 				;;
 		esac
 	done
+	shift $((OPTIND-1))
 }
 
 execute_clean_ps () {
