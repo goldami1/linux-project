@@ -3,7 +3,7 @@
 usage () {
 	echo "Usage: docker_tool.sh	[-c clean_ps -s <status> |"
 	echo "			-c build_push -r <url_to_registry> -u <user>"
-	echo "			-p <password> -v <tag>] [-t]"
+	echo "			-p <password> -v <tag>]"
 	echo
 	echo "  -c clean_ps: Removes all the docker containers with a given <status>,"
 	echo "		status can be \"running\" or \"exited\"."
