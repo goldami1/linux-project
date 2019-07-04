@@ -110,7 +110,7 @@ build_push_flags () {
 }
 
 execute_clean_ps () {
-	docker rm --force $(docker ps -a --filter status=$1 | awk 'NR>1 { print $1 }') > /dev/null
+	docker rm --force $(docker ps -a --filter status=$1 | awk 'NR>1 { print $1 }') > /dev/null 2>&1
 }
 
 execute_build_push () {
