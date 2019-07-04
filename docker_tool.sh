@@ -84,6 +84,7 @@ clean_ps_flags () {
 				;;
 		esac
 	done
+	shift $((OPTIND-1))
 }
 
 build_push_flags () {
